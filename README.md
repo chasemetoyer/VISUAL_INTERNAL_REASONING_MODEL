@@ -1,10 +1,16 @@
-# Hypothesis
+## **Hypothesis**
 
 A transformer-based language model that is trained to generate and condition on an explicit internal visual latent representation, implemented as discrete image tokens within a unified autoregressive vocabulary, will achieve higher accuracy and robustness on spatial and visually grounded reasoning tasks than an architecture-matched text-only baseline.
 
 Furthermore, the model’s performance on these tasks will causally depend on the internal visual representation, such that corruption or removal of the generated visual tokens at inference time will result in a statistically significant degradation in task performance.
 
-# Abstract
+- **H1 (Inductive Bias):** Explicit internal visual representations provide a beneficial inductive bias for reasoning over spatial relations and object interactions.
+
+- **H2 (Necessity):** The generated visual tokens are necessary intermediates for correct reasoning, not merely auxiliary outputs.
+
+- **H3 (Generalization):** Models with internal visual intermediates exhibit improved robustness to linguistic paraphrasing and prompt perturbations compared to text-only models.
+
+## **Abstract**
 
 Large language models (LLMs) exhibit strong performance on linguistic reasoning tasks but continue to struggle with problems requiring spatial and visual reasoning, often relying on shallow textual heuristics rather than grounded internal representations. In this work, we investigate whether equipping a transformer-based language model with an explicit internal visual latent representation improves performance on visually grounded reasoning tasks.
 
