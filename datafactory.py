@@ -5,149 +5,174 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 # --- CONFIGURATION ---
-DATASET_SIZE = 1000  # Start small for testing, scale to 100k later
-OUTPUT_DIR = "dataset_imagination_v1"
+DATASET_SIZE = 2000  # Total samples (will be 1000 Yes, 1000 No)
+OUTPUT_DIR = "dataset_imagination_balanced"
 IMG_SIZE = 256
-GRID_SCALE = 10  # 10x10 logical grid mapped to 256x256 pixels
-OBJ_SIZE = 20    # Radius or half-width of objects (in pixels)
+GRID_SCALE = 10
+OBJ_SIZE = 20
+UNIT_PX = IMG_SIZE // GRID_SCALE  # Pixels per grid unit (approx 25)
 
-# Colors and Shapes
-COLORS = {
-    "red": (255, 0, 0),
-    "blue": (0, 0, 255),
-    "green": (0, 128, 0),
-    "yellow": (255, 255, 0)
-}
-SHAPES = ["circle", "square"]
+# Setup Colors
+COLORS = { "red": (255, 0, 0), "blue": (0, 0, 255) }
 
 class Shape:
-    def __init__(self, color_name, shape_type, x, y):
-        self.color_name = color_name
-        self.color_rgb = COLORS[color_name]
-        self.type = shape_type
-        self.x = x  # Center X (pixels)
-        self.y = y  # Center Y (pixels)
+    def __init__(self, color_rgb, x, y, shape_type):
+        self.color_rgb = color_rgb
+        self.x = x
+        self.y = y
+        self.type = shape_type  # "circle" or "square"
 
     def get_bbox(self):
         return [self.x - OBJ_SIZE, self.y - OBJ_SIZE, 
                 self.x + OBJ_SIZE, self.y + OBJ_SIZE]
 
-def add_visual_noise(draw):
-    """Adds random lines/dots so the model can't memorize pixel indices."""
-    for _ in range(random.randint(5, 15)):
-        x1, y1 = random.randint(0, IMG_SIZE), random.randint(0, IMG_SIZE)
-        x2, y2 = random.randint(0, IMG_SIZE), random.randint(0, IMG_SIZE)
-        fill = (random.randint(200, 255), random.randint(200, 255), random.randint(200, 255))
-        draw.line([(x1, y1), (x2, y2)], fill=fill, width=1)
+def check_overlap_dist(x1, y1, x2, y2):
+    """Returns True if objects at (x1,y1) and (x2,y2) overlap."""
+    dist = np.sqrt((x1 - x2)**2 + (y1 - y2)**2)
+    # Threshold: slightly less than 2*radius to ensure solid overlap
+    return dist < (OBJ_SIZE * 1.5)
 
-def render_scene(shapes, filename):
+def render_scene(anchor, mover, filename):
     img = Image.new("RGB", (IMG_SIZE, IMG_SIZE), "white")
     draw = ImageDraw.Draw(img)
     
-    # 1. Add Visual Noise (Anti-Cheat)
-    add_visual_noise(draw)
+    # 1. Anti-Cheat Noise
+    for _ in range(random.randint(5, 15)):
+        x1, y1 = random.randint(0, IMG_SIZE), random.randint(0, IMG_SIZE)
+        x2, y2 = random.randint(0, IMG_SIZE), random.randint(0, IMG_SIZE)
+        fill = (random.randint(200, 240), random.randint(200, 240), random.randint(200, 240))
+        draw.line([(x1, y1), (x2, y2)], fill=fill, width=1)
     
-    # 2. Draw Shapes
-    for s in shapes:
+    # 2. Draw Objects
+    for s in [anchor, mover]:
         bbox = s.get_bbox()
         if s.type == "circle":
             draw.ellipse(bbox, fill=s.color_rgb, outline="black")
-        elif s.type == "square":
+        else:
             draw.rectangle(bbox, fill=s.color_rgb, outline="black")
             
     img.save(filename)
-    return img
 
-def check_overlap(s1, s2):
-    """Simple bounding box overlap logic."""
-    # Euclidian distance check is cleaner for "touching" logic
-    dist = np.sqrt((s1.x - s2.x)**2 + (s1.y - s2.y)**2)
-    # If distance < sum of radii (approx), they overlap
-    return dist < (OBJ_SIZE * 1.8) # 1.8 gives a little buffer
+def get_valid_coordinate():
+    """Returns a random valid pixel coordinate within grid bounds (with padding)."""
+    margin = OBJ_SIZE + 5
+    return random.randint(margin, IMG_SIZE - margin)
 
-def generate_sample(sample_id):
-    # 1. Setup Logic
-    # We work in "Grid Units" (0-10) to make text descriptions clean, 
-    # but render in pixels with jitter.
+def generate_sample(sample_id, force_overlap):
+    """
+    force_overlap (bool): If True, we engineer the start pos so they collide.
+                          If False, we ensure they DO NOT collide.
+    """
     
-    # Object A (The Mover)
-    grid_x_start = random.randint(1, 8)
-    grid_y_start = random.randint(1, 8)
-    
-    # Object B (The Anchor - Stationary)
-    grid_x_anchor = random.randint(1, 8)
-    grid_y_anchor = random.randint(1, 8)
-    
-    # Define Move (Delta)
-    dx = random.choice([-2, -1, 0, 1, 2])
-    dy = random.choice([-2, -1, 0, 1, 2])
-    
-    # Ensure we actually move somewhere
-    if dx == 0 and dy == 0: dx = 1
+    max_retries = 100
+    for _ in range(max_retries):
         
-    # Create Objects
-    # Add random pixel jitter (+/- 5px) so strict grid memorization fails
-    jitter = lambda: random.randint(-5, 5)
-    
-    unit = IMG_SIZE // GRID_SCALE # 25 pixels per grid unit
-    
-    pixel_x_start = (grid_x_start * unit) + jitter()
-    pixel_y_start = (grid_y_start * unit) + jitter()
-    
-    pixel_x_anchor = (grid_x_anchor * unit) + jitter()
-    pixel_y_anchor = (grid_y_anchor * unit) + jitter()
-    
-    obj_mover = Shape("red", "square", pixel_x_start, pixel_y_start)
-    obj_anchor = Shape("blue", "circle", pixel_x_anchor, pixel_y_anchor)
-    
-    # 2. Text Prompt Generation
-    prompt = (f"Imagine a red square at grid position ({grid_x_start}, {grid_y_start}) "
-              f"and a blue circle at ({grid_x_anchor}, {grid_y_anchor}). "
-              f"Move the red square {dx} units right and {dy} units down. "
-              f"Does it overlap with the blue circle?")
-    
-    # 3. Simulate the Move (The "Ground Truth" Logic)
-    final_x = pixel_x_start + (dx * unit)
-    final_y = pixel_y_start + (dy * unit)
-    
-    # Update Mover Position for Rendering
-    obj_mover.x = final_x
-    obj_mover.y = final_y
-    
-    # 4. Render the "Imagined" State
-    # Note: We verify if the move put it off-screen, but we render it anyway
-    img_filename = os.path.join(OUTPUT_DIR, "images", f"img_{sample_id:06d}.png")
-    render_scene([obj_anchor, obj_mover], img_filename)
-    
-    # 5. Compute Answer
-    is_overlapping = check_overlap(obj_mover, obj_anchor)
-    answer = "Yes" if is_overlapping else "No"
-    
-    return {
-        "id": sample_id,
-        "prompt": prompt,
-        "image_path": img_filename,
-        "answer": answer,
-        "metadata": {
-            "dx": dx, "dy": dy, "start": (grid_x_start, grid_y_start)
-        }
-    }
+        # 1. Define the Anchor (Static Blue Circle)
+        # We place it somewhat centrally to increase chance of valid moves
+        anchor_x = random.randint(50, 200)
+        anchor_y = random.randint(50, 200)
+        
+        # 2. Define the Move Vector (Grid Units)
+        dx = random.choice([-3, -2, -1, 1, 2, 3])
+        dy = random.choice([-3, -2, -1, 1, 2, 3])
+        move_px_x = dx * UNIT_PX
+        move_px_y = dy * UNIT_PX
+        
+        jitter = random.randint(-5, 5)
 
-# --- MAIN EXECUTION ---
-if __name__ == "__main__":
-    # Create directories
-    os.makedirs(os.path.join(OUTPUT_DIR, "images"), exist_ok=True)
-    
-    metadata_file = os.path.join(OUTPUT_DIR, "dataset.jsonl")
-    
-    print(f"Generating {DATASET_SIZE} samples...")
-    
-    with open(metadata_file, "w") as f:
-        for i in range(DATASET_SIZE):
-            sample = generate_sample(i)
-            f.write(json.dumps(sample) + "\n")
+        if force_overlap:
+            # === REVERSE ENGINEERING ===
+            # We want the Final Position to be roughly where the Anchor is.
+            # Final_Mover = Anchor + Small_Random_Offset (so it's not perfect center-on-center)
+            offset_x = random.randint(-15, 15) 
+            offset_y = random.randint(-15, 15)
             
-            if i % 100 == 0:
-                print(f"Generated {i} samples...", end="\r")
-                
-    print(f"\nDone! Data saved to {OUTPUT_DIR}")
+            final_mover_x = anchor_x + offset_x
+            final_mover_y = anchor_y + offset_y
+            
+            # Back-calculate Start Position
+            # Start = Final - Move
+            start_mover_x = final_mover_x - move_px_x + jitter
+            start_mover_y = final_mover_y - move_px_y + jitter
+            
+        else:
+            # === RANDOM GENERATION (likely no overlap) ===
+            start_mover_x = get_valid_coordinate()
+            start_mover_y = get_valid_coordinate()
+            
+            # Calculate Final
+            final_mover_x = start_mover_x + move_px_x + jitter
+            final_mover_y = start_mover_y + move_px_y + jitter
+            
+            # If we accidentally created an overlap, RETRY (we want a strict 'No')
+            if check_overlap_dist(final_mover_x, final_mover_y, anchor_x, anchor_y):
+                continue
+
+        # 3. Validation: Is the Start Position on screen?
+        margin = OBJ_SIZE
+        if not (margin < start_mover_x < IMG_SIZE - margin and 
+                margin < start_mover_y < IMG_SIZE - margin):
+            continue # Retry with new coordinates
+            
+        # 4. Success! Create Objects
+        anchor = Shape(COLORS["blue"], anchor_x, anchor_y, "circle")
+        mover = Shape(COLORS["red"], start_mover_x, start_mover_y, "square")
+        
+        # Update Mover to Final State for Rendering
+        mover_final = Shape(COLORS["red"], final_mover_x, final_mover_y, "square")
+        
+        # Render
+        img_filename = os.path.join(OUTPUT_DIR, "images", f"img_{sample_id:06d}.png")
+        render_scene(anchor, mover_final, img_filename)
+        
+        # Text Prompt
+        # Convert pixel start positions back to approximate grid units for the prompt
+        # (We round to nearest integer so the text looks like clean logic)
+        grid_start_x = int(start_mover_x / UNIT_PX)
+        grid_start_y = int(start_mover_y / UNIT_PX)
+        grid_anchor_x = int(anchor_x / UNIT_PX)
+        grid_anchor_y = int(anchor_y / UNIT_PX)
+        
+        prompt = (f"Imagine a red square at grid ({grid_start_x}, {grid_start_y}) "
+                  f"and a blue circle at ({grid_anchor_x}, {grid_anchor_y}). "
+                  f"Move red square {dx} right, {dy} down. Overlap?")
+        
+        return {
+            "prompt": prompt,
+            "image_path": img_filename,
+            "answer": "Yes" if force_overlap else "No"
+        }
+        
+    print("Warning: Could not generate valid sample after retries.")
+    return None
+
+# --- MAIN LOOP ---
+if __name__ == "__main__":
+    if os.path.exists(OUTPUT_DIR):
+        import shutil
+        shutil.rmtree(OUTPUT_DIR) # Clear old data
+    os.makedirs(os.path.join(OUTPUT_DIR, "images"))
+    
+    print(f"Generating {DATASET_SIZE} balanced samples...")
+    
+    data_list = []
+    
+    for i in range(DATASET_SIZE):
+        # Force 50/50 Split
+        want_overlap = (i % 2 == 0)
+        
+        sample = generate_sample(i, want_overlap)
+        if sample:
+            data_list.append(sample)
+            
+        if i % 100 == 0:
+            print(f"Progress: {i}/{DATASET_SIZE}", end="\r")
+            
+    # Shuffle the final list so the model doesn't learn "Yes, No, Yes, No" pattern
+    random.shuffle(data_list)
+    
+    with open(os.path.join(OUTPUT_DIR, "dataset.jsonl"), "w") as f:
+        for entry in data_list:
+            f.write(json.dumps(entry) + "\n")
+            
+    print(f"\nCompleted! Saved to {OUTPUT_DIR}")

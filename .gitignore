@@ -2,6 +2,6 @@
 __pycache__/
 *.pyc
 .DS_Store
-dataset_imagination_v1/
+dataset_imagination_*/
 *.ckpt
 *.yaml
