@@ -148,22 +148,26 @@ def main():
     start_time = time.time()
     
     print("\nStarting Training Loop...")
-    for iter_num, (xb, yb) in enumerate(dataloader):
-        if iter_num >= MAX_ITERS:
-            break
+    iter_num = 0
+    while iter_num < MAX_ITERS:
+        for xb, yb in dataloader:
+            if iter_num >= MAX_ITERS:
+                break
+                
+            xb, yb = xb.to(DEVICE), yb.to(DEVICE)
             
-        xb, yb = xb.to(DEVICE), yb.to(DEVICE)
-        
-        # Forward
-        logits, loss = model(xb, yb)
-        
-        # Backward
-        optimizer.zero_grad(set_to_none=True)
-        loss.backward()
-        optimizer.step()
-        
-        if iter_num % 10 == 0:
-            print(f"Iter {iter_num}: Loss {loss.item():.4f}")
+            # Forward
+            logits, loss = model(xb, yb)
+            
+            # Backward
+            optimizer.zero_grad(set_to_none=True)
+            loss.backward()
+            optimizer.step()
+            
+            if iter_num % 10 == 0:
+                print(f"Iter {iter_num}: Loss {loss.item():.4f}")
+            
+            iter_num += 1
             
     print(f"\nTraining Finished in {time.time()-start_time:.2f}s")
     
