@@ -5,3 +5,7 @@ __pycache__/
 dataset_imagination_*/
 *.ckpt
 *.yaml
+*.pth
+*.pt
+downloader.py
+imagination_result.png
