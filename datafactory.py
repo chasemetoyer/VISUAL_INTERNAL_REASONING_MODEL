@@ -5,7 +5,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 # --- CONFIGURATION ---
-DATASET_SIZE = 2000  # Total samples (will be 1000 Yes, 1000 No)
+DATASET_SIZE = 100000  # Total samples (will be 1000 Yes, 1000 No)
 OUTPUT_DIR = "dataset_imagination_balanced"
 IMG_SIZE = 256
 GRID_SCALE = 10

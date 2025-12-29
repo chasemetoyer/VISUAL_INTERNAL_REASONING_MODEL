@@ -4,15 +4,16 @@ import numpy as np
 from PIL import Image
 from taming.models.vqgan import VQModel
 from transformers import GPT2TokenizerFast
-# Import the model class from your training script
 from train_imaginer import GPT, GPTConfig 
+import torch.nn.functional as F
 
 # --- CONFIG ---
-MODEL_PATH = "imaginer_final.pth"      # Your trained model
-DATA_PATH = "train_data_final.pt"      # To get the exact vocab IDs
+MODEL_PATH = "imaginer_final.pth"
+DATA_PATH = "train_data_final.pt"
 VQGAN_CONFIG = "vqgan_imagenet_f16_16384.yaml"
 VQGAN_CKPT = "vqgan_imagenet_f16_16384.ckpt"
 
+# Device Setup
 if torch.cuda.is_available(): DEVICE = 'cuda'
 elif torch.backends.mps.is_available(): DEVICE = 'mps'
 else: DEVICE = 'cpu'
@@ -29,76 +30,70 @@ def load_vqgan():
     return model
 
 def generate():
-    # 1. Load Metadata (The Truth)
-    print(f"Loading metadata from {DATA_PATH}...")
+    # 1. Load Data
     data = torch.load(DATA_PATH, weights_only=False)
     meta = data['meta']
     vocab_size = meta['vocab_size_total']
     img_start_id = meta['img_start_id']
-    img_end_id = meta['img_end_id']
     vocab_offset = meta['vocab_offset']
     
     # 2. Load Model
-    print("Loading Imaginer Model...")
+    print(f"Loading Model (Vocab: {vocab_size})...")
     config = GPTConfig(vocab_size=vocab_size, block_size=512)
     model = GPT(config)
     model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE, weights_only=False))
     model.eval().to(DEVICE)
     
-    # 3. Setup Tokenizer & Prompt
+    # 3. Prompt
     tokenizer = GPT2TokenizerFast.from_pretrained("gpt2")
-    
-    # A test prompt that requires logic
-    # "Imagine a red square at (2,2) and blue circle at (6,6). Move red 2 right. Overlap?"
-    # The Red Square should end up at (4,2). The Blue is at (6,6). They should NOT touch.
     prompt = "Imagine a red square at grid (2, 2) and a blue circle at (6, 6). Move red square 2 right, 0 down. Overlap?"
-    
     print(f"Prompt: {prompt}")
     
     prompt_ids = tokenizer.encode(prompt)
     input_ids = torch.tensor(prompt_ids + [img_start_id], dtype=torch.long).unsqueeze(0).to(DEVICE)
 
-    # 4. Generate Visual Tokens
-    print("Dreaming...")
+    # 4. Generate with SAMPLING (The Fix)
+    print("Dreaming with Temperature=0.8...")
     generated = []
     
     with torch.no_grad():
-        # Generate exactly 256 tokens (16x16 grid)
-        for _ in range(256):
+        for i in range(256):
             logits, _ = model(input_ids)
-            logits = logits[:, -1, :]
+            logits = logits[:, -1, :] / 0.8  # Temperature (Lower = sharper, Higher = wilder)
             
-            # Greedy decoding (pick the most likely pixel)
-            next_token = torch.argmax(logits, dim=-1).unsqueeze(0)
+            # SAMPLE instead of ARGMAX
+            probs = F.softmax(logits, dim=-1)
+            next_token = torch.multinomial(probs, num_samples=1)
             
             input_ids = torch.cat((input_ids, next_token), dim=1)
             generated.append(next_token.item())
-            
-    # 5. Decode Image
-    print("Decoding pixels...")
-    vqgan = load_vqgan()
-    
-    # Shift back to VQGAN range (0-16383)
-    valid_tokens = []
-    for t in generated:
-        if t >= vocab_offset:
-            valid_tokens.append(t - vocab_offset)
-        else:
-            valid_tokens.append(0) # Black pixel if it predicted a text token by mistake
 
+    # 5. DIAGNOSTIC PRINT
+    # Let's see what the raw tokens look like
+    print("\n--- DIAGNOSTIC: First 20 Generated Tokens ---")
+    print(generated[:20])
+    
+    valid_count = sum(1 for t in generated if t >= vocab_offset)
+    print(f"Valid Image Tokens: {valid_count}/256")
+    
+    if valid_count < 200:
+        print("WARNING: Model is predicting text/garbage instead of images!")
+
+    # 6. Decode
+    vqgan = load_vqgan()
+    valid_tokens = [t - vocab_offset if t >= vocab_offset else 0 for t in generated]
     z_indices = torch.tensor(valid_tokens, dtype=torch.long).to(DEVICE).unsqueeze(0)
     
-    # VQGAN Decode
     x_recon = vqgan.decode(vqgan.quantize.get_codebook_entry(z_indices, shape=(1, 16, 16, 256)))
     
-    # Save
+    # Detach and Process
     x_recon = torch.clamp(x_recon, -1., 1.)
     x_recon = (x_recon + 1.0) / 2.0 * 255.0
-    x_recon = x_recon.permute(0, 2, 3, 1).detach().cpu().numpy().astype(np.uint8)
+    x_recon = x_recon.permute(0, 2, 3, 1).detach().cpu().numpy().astype(np.uint8) # Added .detach()
     
     img = Image.fromarray(x_recon[0])
-    img.save("final_dream.png")
-    print("Saved 'final_dream.png' - Go look at it!")
+    img.save("diagnostic_dream.png")
+    print("Saved 'diagnostic_dream.png'")
 
 if __name__ == "__main__":
     generate()
