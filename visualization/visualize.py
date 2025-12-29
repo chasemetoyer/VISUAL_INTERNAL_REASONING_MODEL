@@ -4,8 +4,10 @@ import numpy as np
 from PIL import Image
 from taming.models.vqgan import VQModel
 from transformers import GPT2TokenizerFast
-# Import the model class from your training script
-from train_imaginer import GPT, GPTConfig 
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from src.train_imaginer import GPT, GPTConfig 
 
 # --- CONFIG ---
 MODEL_PATH = "imaginer_final.pth"      # Your trained model

@@ -4,11 +4,14 @@ import numpy as np
 from PIL import Image
 from taming.models.vqgan import VQModel
 from transformers import GPT2TokenizerFast
-from train_imaginer import GPT, GPTConfig 
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from src.train_imaginer import GPT, GPTConfig 
 import torch.nn.functional as F
 
 # --- CONFIG ---
-MODEL_PATH = "imaginer_final.pth"
+MODEL_PATH = "imaginer_ckpt_20000.pth"
 DATA_PATH = "train_data_final.pt"
 VQGAN_CONFIG = "vqgan_imagenet_f16_16384.yaml"
 VQGAN_CKPT = "vqgan_imagenet_f16_16384.ckpt"

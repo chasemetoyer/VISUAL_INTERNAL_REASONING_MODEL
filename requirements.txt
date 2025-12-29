@@ -1,0 +1,12 @@
+torch
+torchvision
+numpy
+Pillow
+PyYAML
+tqdm
+transformers
+taming-transformers-rom1504
+omegaconf
+einops
+pytorch-lightning
+huggingface_hub
