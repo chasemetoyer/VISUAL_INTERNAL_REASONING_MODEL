@@ -74,7 +74,8 @@ We utilize a standard GPT-2 style decoder-only transformer. The vocabulary is ex
 
 The model is trained to minimize the negative log-likelihood over the joint sequence of Text Prompt ($x_{prompt}$), Visual Latents ($v$), and Text Answer ($y_{answer}$):
 
-$$L = -\sum \log P(x_i | x_{<i})$$
+<img width="418" height="39" alt="Screenshot 2025-12-29 at 3 06 52 AM" src="https://github.com/user-attachments/assets/4d8c8642-ea87-44e9-aad5-391bd67cb024">
+
 
 where $x = [x_{prompt}, v, y_{answer}]$.
 During training, we apply **loss masking** to the prompt tokens and padding, ensuring the model focuses capacity solely on visual generation and answer reasoning.
