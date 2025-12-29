@@ -69,12 +69,13 @@ This research investigates three core claims regarding multimodal reasoning in t
 ### **1. Architecture**
 
 We utilize a standard GPT-2 style decoder-only transformer. The vocabulary is expanded to include discrete codebook indices from a VQGAN trained on ImageNet.
+<img width="396" height="41" alt="Screenshot 2025-12-29 at 3 08 50 AM" src="https://github.com/user-attachments/assets/bc6123dc-0cd8-436c-9b8a-110f14f5b116" />
 
 ### **2. Training Objective**
 
 The model is trained to minimize the negative log-likelihood over the joint sequence of Text Prompt ($x_{prompt}$), Visual Latents ($v$), and Text Answer ($y_{answer}$):
+<img width="188" height="58" alt="Screenshot 2025-12-29 at 3 09 02 AM" src="https://github.com/user-attachments/assets/72219fdb-3297-493f-bfdc-6317c95e05a2" />
 
-<img width="418" height="39" alt="Screenshot 2025-12-29 at 3 06 52 AM" src="https://github.com/user-attachments/assets/4d8c8642-ea87-44e9-aad5-391bd67cb024">
 
 
 where $x = [x_{prompt}, v, y_{answer}]$.
