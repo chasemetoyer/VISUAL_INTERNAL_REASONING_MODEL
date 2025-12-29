@@ -152,7 +152,8 @@ python visualization/visualize.py
 
 | Diagnostic Dream | Interpretation |
 | --- | --- |
-| ![Diagnostic Dream](diagnostic_dream.png) | The model successfully disentangles the two objects and places them in distinct coordinate spaces, allowing it to correctly deduce that they do not overlap. |
+| ![Diagnostic Dream](<img width="256" height="256" alt="diagnostic_dream" src="https://github.com/user-attachments/assets/0522bb6f-f83b-48eb-83c6-5e72152552d1" />
+) | The model successfully disentangles the two objects and places them in distinct coordinate spaces, allowing it to correctly deduce that they do not overlap. |
 
 ---
 
